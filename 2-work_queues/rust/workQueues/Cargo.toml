@@ -1,0 +1,31 @@
+[package]
+name = "work_queues"
+version = "0.1.0"
+authors = ["Jonathan Gerber <jlgerber@gmail.com>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[[bin]]
+name = "worker"
+path = "src/worker/bin/worker.rs"
+
+[[bin]]
+name = "task"
+path = "src/task/bin/task.rs"
+
+
+[dependencies]
+lapin = "1.4.2"
+env_logger = "0.8.1"
+logger = "0.4.0"
+futures-executor = "0.3.7"
+futures-util = "0.3.7"
+log = "0.4.11"
+#futures-lite = "1.11.2"
+tracing = "0.1.21"
+#async-global-executor = "1.4.2"
+tracing-subscriber = "0.2.14"
+async-std = {version = "1.6.5", features= ["attributes"]}
+async-lapin = "0.4.1"
+async-amqp = "0.1.8"
+structopt = "0.3.20"
