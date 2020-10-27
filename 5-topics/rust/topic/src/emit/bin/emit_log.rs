@@ -6,11 +6,10 @@ use lapin::{
     ConnectionProperties, Result, 
 };
 use std::env;
-use std::convert::AsRef;
 use std::str::FromStr;
 use tracing::{info,error};
 
-use routing::{LOCALHOST, EXCHANGE, EXCHANGE_TYPE, LogLevel};
+use topic::{LOCALHOST, EXCHANGE, EXCHANGE_TYPE, LocLogLevel};
 
 // set up default logging level and initialize tracing
 fn setup() {
@@ -21,29 +20,29 @@ fn setup() {
     tracing_subscriber::fmt::init();
 }
 
-fn _parse_args() -> AnyhowResult<(LogLevel, String)> {
+fn _parse_args() -> AnyhowResult<(LocLogLevel, String)> {
     let args = env::args().collect::<Vec<_>>();
     if args.len() < 3 {
         return Err(anyhow!("must provide at least 2 arguments"));
     }
 
-    let routing_key = LogLevel::from_str(&args[1]);
-    if routing_key.is_err() {
-        return Err(anyhow!("Routing key invalid"));
-    };
-
-    let routing_key = routing_key.unwrap();
+    let routing_key = LocLogLevel::from_str(&args[1])
+                                    .map_err(|_| anyhow!("unable to convert {} to LocLogLevel",&args[1]))?;
+    
+    if !routing_key.is_specific() {
+        error!("invaild routing key: {:?}", routing_key);
+        std::process::exit(1);
+    }
 
     let msg = args[1..args.len()].join(" ");
 
     Ok((routing_key, msg))
 }
 
-fn parse_args() -> (LogLevel, String) {
-    let args = _parse_args();
-    match args {
-        Ok(result) => result,
-        Err(err) => {error!("Unable to parse arguments");  
+fn parse_args() -> (String, String) {
+    match _parse_args() {
+        Ok((key, msg)) => (key.to_string(), msg),
+        Err(err) => {error!("Unable to parse arguments: {}", err);std::process::exit(1) ;},
     }
 }
 
@@ -51,12 +50,8 @@ fn parse_args() -> (LogLevel, String) {
 async fn main() -> Result<()> {
     setup();
 
-    let args = parse_args();
-    if args.is_err() {
-        error!("{:#?}", args);
-        std::process::exit(1);
-    }
-    let (routing_key, msg) = args.unwrap();
+    let (routing_key,msg) = parse_args();
+    
 
     let addr = std::env::var("AMQP_ADDR").unwrap_or_else(|_| LOCALHOST.into());
   
@@ -77,13 +72,13 @@ async fn main() -> Result<()> {
         FieldTable::default()
     ).await?;
     info!(?exchange, "Declared exchange: {}", &EXCHANGE);
-    
+    info!("emitting '{}' exchange: {} routing_key: {}", &msg, &EXCHANGE, &routing_key);
     let confirm = channel_a
         .basic_publish(
             // exchange
             EXCHANGE, 
             // routing key
-            routing_key.as_ref(), 
+            &routing_key, 
             // options
             BasicPublishOptions::default(),
             // payload

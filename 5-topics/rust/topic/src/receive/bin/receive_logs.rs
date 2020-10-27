@@ -1,16 +1,14 @@
-use lapin::{
-    options::*,  types::FieldTable,  Connection,
-    ConnectionProperties, Result, message::DeliveryResult
-};
-
-use structopt::StructOpt;
 
 use async_std;
-use tracing::info;
+    use lapin::{
+        options::*,  types::FieldTable,  Connection,
+        ConnectionProperties, Result, message::DeliveryResult
+    };
 use std::time;
-use std::convert::AsRef;
-use routing::{LOCALHOST, QUEUE, EXCHANGE, EXCHANGE_TYPE, LogLevel};
-use routing::quit_service;
+use structopt::StructOpt;
+use tracing::info;
+use topic::{LOCALHOST, QUEUE, EXCHANGE, EXCHANGE_TYPE, LocLogLevel};
+use topic::quit_service;
 
 
 #[derive(Debug, StructOpt)]
@@ -24,7 +22,7 @@ struct Opt {
     num_msgs: Option<u16>,
     /// Add supported routing keys
     #[structopt(short="k", long="key")]
-    keys: Vec<LogLevel>
+    keys: Vec<LocLogLevel>
 }
 
 
@@ -48,7 +46,6 @@ async fn main() -> Result<()> {
         ConnectionProperties::default(),
     )
     .await?;
-
     info!("Connection to RabbitMq Server Established");
 
     // Create the channel
@@ -77,15 +74,16 @@ async fn main() -> Result<()> {
 
     // bind the queue to the exchange
     for route in opt.keys {
+        
         channel_b.queue_bind(
             // queue name
             &queue.name().as_str(),
             EXCHANGE,
-            &route.as_ref(),
+            &route.to_string(),
             QueueBindOptions::default(),
             FieldTable::default()
         ).await?;
-        info!("Queue '{}' bound to '{}'", &queue.name().as_str(), &route.as_ref());
+        info!("Queue '{}' bound to '{}'", &queue.name().as_str(), &route.to_string());
     }
     // Update the quality of service options to limit the consumer to
     // a specific number of messages if requested
@@ -111,20 +109,18 @@ async fn main() -> Result<()> {
         let delivery = delivery.expect("error caught in in consumer");
         if let Some((channel, delivery)) = delivery {
             
-            let val = std::str::from_utf8(&delivery.data);
-            let pieces = val.split(" ");
-            let level = LogLevel::from_str(pieces[0]);
-            let msg = &pieces[1..].join(" ");
-            if let Ok(value) = val {
-                println!("[x] Start:  {}",value);
-                let sleep_duration = value.matches('.').count();
-                if sleep_duration > 0 {
+            let value = std::str::from_utf8(&delivery.data).unwrap();
+            //let pieces = value.split(" ");
+            //let level = LocLogLevel::from_str(pieces[0]);
+            //let msg = &pieces[1..].join(" ");
+            
+            println!("[x] Start:  {}",value);
+            let sleep_duration = value.matches('.').count()-1;
+            if sleep_duration > 0 {
                 async_std::task::sleep(time::Duration::new(sleep_duration as u64,0)).await;
             }
-                println!("[x] Finish: {}",value);
-            } else {
-                println!("unable to convert raw data from delivery to string");
-            }
+            println!("[x] Finish: {}",value);
+            
             channel
                 .basic_ack(delivery.delivery_tag, BasicAckOptions::default())
                 .await

@@ -5,7 +5,7 @@ use lapin::ExchangeKind;
 use strum::{EnumString, AsRefStr};
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, EnumString, AsRefStr)]
-pub enum Route{
+pub enum LogLevel{
     #[strum(serialize="debug")]
     Debug,
     #[strum(serialize="info")]
