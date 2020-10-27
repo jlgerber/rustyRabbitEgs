@@ -14,7 +14,7 @@ use pubsub::quit_service;
 
 
 #[derive(Debug, StructOpt)]
-#[structopt(name="worker", about="processes messages from rabbit work queue")]
+#[structopt(name="recieve-logs", about="processes messages from rabbit log queue")]
 struct Opt {
     /// Optionally bound the queue size. A value of 1 ensures that the
     /// worker may only work on 1 message at a time. This will also force the 
@@ -25,18 +25,20 @@ struct Opt {
 }
 
 
-#[async_std::main]
-async fn main() -> Result<()> {
+fn initialize() {
     if std::env::var("RUST_LOG").is_err() {
         std::env::set_var("RUST_LOG", "info");
     }
+    
+    tracing_subscriber::fmt::init();
+}
+#[async_std::main]
+async fn main() -> Result<()> {
+    initialize();
     // process args
     let opt = Opt::from_args();
 
-    tracing_subscriber::fmt::init();
-
     let addr = std::env::var("AMQP_ADDR").unwrap_or_else(|_| LOCALHOST.into());
-
     // Establish connection
     let conn = Connection::connect(
         &addr,
@@ -46,23 +48,22 @@ async fn main() -> Result<()> {
 
     info!("Connection to RabbitMq Server Established");
 
+    // Create the channel
     let channel_b = conn.create_channel().await?;
     info!("Channel created");
     
+    // Create the exchange from the channel
     let exchange = channel_b.exchange_declare(
         EXCHANGE,
         EXCHANGE_TYPE,
         ExchangeDeclareOptions::default(),
         FieldTable::default()
     ).await?;
-    // what manner of vodo is this? what does `?queue` mean?
-    // `tracing` uses the `?` prefix to indicate that a variable
-    // should use std::debug to print. And `tracing` uses `%`
-    // prefix to indicate that it should use std::display. Just
-    // so you know....
+    info!(?exchange, "Declared exchange: {}", &EXCHANGE);
+
+    // declare the queue
     let mut queue_opts = QueueDeclareOptions::default();
     queue_opts.exclusive = true;
-    info!(?exchange, "Declared exchange: {}", &EXCHANGE);
     let queue = channel_b
         .queue_declare(
             QUEUE,
@@ -71,6 +72,7 @@ async fn main() -> Result<()> {
         )
         .await?;
 
+    // bind the queue to the exchange
     channel_b.queue_bind(
         // queue name
         &queue.name().as_str(),
@@ -80,31 +82,26 @@ async fn main() -> Result<()> {
         FieldTable::default()
     ).await?;
 
-    // qos_options must use interior mutability.
+    // Update the quality of service options to limit the consumer to
+    // a specific number of messages if requested
     let qos_options = BasicQosOptions::default();
     if let Some(msgcnt) = opt.num_msgs {
         channel_b.basic_qos(msgcnt, qos_options).await?;
     }
-
     info!("QOS OPTIONS: {:#?}", qos_options);
 
-    let  consume_options = BasicConsumeOptions::default();
-    // exclusive queue 
-    //consume_options.exclusive= true;
-    // doesn't need to be mutable anymore
-    let consume_options = consume_options;
-
-    info!("consume options {:#?}", consume_options);
+    // create a consumer
     let  consumer = channel_b
         .basic_consume(
             &queue.name().as_str(),
             "my_consumer",
-            consume_options,
+            BasicConsumeOptions::default(),
             FieldTable::default(),
         )
         .await?;
-
     info!("Channel Consumer created");
+    
+    // register the delegate (callback) with the consumer
     consumer.set_delegate(move |delivery: DeliveryResult| async move {
         let delivery = delivery.expect("error caught in in consumer");
         if let Some((channel, delivery)) = delivery {
@@ -126,7 +123,6 @@ async fn main() -> Result<()> {
                 .await
                 .expect("failed to ack");
         } 
-
     })?;
     
     Ok(quit_service::prompt())
