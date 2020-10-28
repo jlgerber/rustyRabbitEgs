@@ -3,22 +3,16 @@
 //! This is a port of the python example #3 int the tutorial
 use lapin::ExchangeKind;
 
+
 pub mod loglevel;
 pub use loglevel::LogLevel;
 pub mod location;
 pub use location::Location;
-pub mod loc_loglevel;
-pub use loc_loglevel::LocLogLevel;
+pub mod routing_key;
+pub use routing_key::RoutingKey;
 
-// /// validate that the provided key is valid. To be a valid topic key, the LocLogLeve
-// pub fn topic_key_is_valid(key: &LocLogLevel) -> bool {
-//     // lazy_static! {
-//     //     static ref RE: Regex = Regex::new(r"^(([a-zA-Z0-9]\.)*[a-zA-Z0-9])+\.(([a-zA-Z0-9]\.)*[a-zA-Z0-9])+$").unwrap();
-//     // } 
-//     // RE.is_match(&key.to_string())
-//     key.is_specific()
-// }
-
+pub mod binding_key;
+pub use binding_key::BindingKey;
 
 pub const LOCALHOST: &'static str = "amqp://127.0.0.1:5672/%2f";
 pub const EXCHANGE: &'static str = "routed_logs_rust";

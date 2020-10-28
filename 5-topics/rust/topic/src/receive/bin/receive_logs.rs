@@ -7,7 +7,7 @@ use async_std;
 use std::time;
 use structopt::StructOpt;
 use tracing::info;
-use topic::{LOCALHOST, QUEUE, EXCHANGE, EXCHANGE_TYPE, LocLogLevel};
+use topic::{LOCALHOST, QUEUE, EXCHANGE, EXCHANGE_TYPE, BindingKey};
 use topic::quit_service;
 
 
@@ -22,7 +22,7 @@ struct Opt {
     num_msgs: Option<u16>,
     /// Add supported routing keys
     #[structopt(short="k", long="key")]
-    keys: Vec<LocLogLevel>
+    keys: Vec<BindingKey>
 }
 
 
@@ -41,6 +41,7 @@ async fn main() -> Result<()> {
 
     let addr = std::env::var("AMQP_ADDR").unwrap_or_else(|_| LOCALHOST.into());
     // Establish connection
+    info!("Attempting to connect to rabbit at : {}", addr);
     let conn = Connection::connect(
         &addr,
         ConnectionProperties::default(),
@@ -111,7 +112,7 @@ async fn main() -> Result<()> {
             
             let value = std::str::from_utf8(&delivery.data).unwrap();
             //let pieces = value.split(" ");
-            //let level = LocLogLevel::from_str(pieces[0]);
+            //let level = BindingKey::from_str(pieces[0]);
             //let msg = &pieces[1..].join(" ");
             
             println!("[x] Start:  {}",value);

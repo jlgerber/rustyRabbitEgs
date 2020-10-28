@@ -9,7 +9,7 @@ use std::env;
 use std::str::FromStr;
 use tracing::{info,error};
 
-use topic::{LOCALHOST, EXCHANGE, EXCHANGE_TYPE, LocLogLevel};
+use topic::{LOCALHOST, EXCHANGE, EXCHANGE_TYPE, RoutingKey};
 
 // set up default logging level and initialize tracing
 fn setup() {
@@ -20,19 +20,19 @@ fn setup() {
     tracing_subscriber::fmt::init();
 }
 
-fn _parse_args() -> AnyhowResult<(LocLogLevel, String)> {
+fn _parse_args() -> AnyhowResult<(RoutingKey, String)> {
     let args = env::args().collect::<Vec<_>>();
     if args.len() < 3 {
         return Err(anyhow!("must provide at least 2 arguments"));
     }
 
-    let routing_key = LocLogLevel::from_str(&args[1])
-                                    .map_err(|_| anyhow!("unable to convert {} to LocLogLevel",&args[1]))?;
+    let routing_key = RoutingKey::from_str(&args[1])
+                                    .map_err(|_| anyhow!("unable to convert {} to RoutingKey",&args[1]))?;
     
-    if !routing_key.is_specific() {
-        error!("invaild routing key: {:?}", routing_key);
-        std::process::exit(1);
-    }
+    // if !routing_key.is_specific() {
+    //     error!("invaild routing key: {:?}", routing_key);
+    //     std::process::exit(1);
+    // }
 
     let msg = args[1..args.len()].join(" ");
 

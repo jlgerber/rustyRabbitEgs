@@ -1,18 +1,25 @@
-use std::str::FromStr;
-use std::fmt;
+//! binding_key
+//!
+//! # BindingKey
+//! struct which represents a BindingKey
+//! 
 use ::anyhow::anyhow;
-
 use anyhow::Error as AnyhowError;
+use std::fmt;
+use std::str::FromStr;
 
 use crate::LogLevel;
 use crate::Location;
+use std::convert::From;
+use crate::RoutingKey;
+
 /// a location aware log level, specified as a dot delimited
 /// <location>.<level>
 /// Either location of level or both may be specified as "*" to 
 /// indicate any
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
-pub enum LocLogLevel {
-    /// Specific Location and LogLevel
+pub enum BindingKey {
+    /// BindingKey
     Pair{
     location: Location,
     level: LogLevel
@@ -25,14 +32,21 @@ pub enum LocLogLevel {
     Any,
 }
 
-impl LocLogLevel {
-    /// Does the variant of LocLogLevel represent a distinct pair of Location and Level?
+impl BindingKey {
+    /// Does the variant of BindingKey represent a distinct pair of Location and Level?
     pub fn is_specific(&self) -> bool {
         if let Self::Pair{..} = self {true} else {false} 
     }
 }
 
-impl FromStr for LocLogLevel {
+impl From<RoutingKey> for BindingKey {
+    fn from(k: RoutingKey) -> Self {
+        let RoutingKey{location, level} = k;
+        BindingKey::Pair{location, level}
+    }
+}
+
+impl FromStr for BindingKey {
     type Err = AnyhowError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
@@ -66,7 +80,7 @@ impl FromStr for LocLogLevel {
 }
 
 
-impl fmt::Display for LocLogLevel {
+impl fmt::Display for BindingKey {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Pair{location,level} => write!(f, "{}.{}",location.as_ref(), level.as_ref() ),
