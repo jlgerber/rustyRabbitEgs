@@ -106,8 +106,8 @@ async fn main() -> Result<()> {
                 //     println!("unable to convert raw data from delivery to string");
                 // }
 
-                // I believe that i have read somewhere that i needed to validate the 
-                // correlation id, but it doesnt seem to be getting set.
+                // do a bit more work to get at the correlation_id 
+                // (ok a lot more work)
                 if let Some(cor_id) = delivery.properties.correlation_id() {
                     if cor_id.as_str() == &cid {
                         let val = std::str::from_utf8(&delivery.data);
