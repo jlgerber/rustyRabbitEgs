@@ -69,7 +69,6 @@ async fn main() -> Result<()> {
         .await?;
   
     info!( "Declared queue");
-   // info!(?queue, "Declared queue");
     
     // consumer
     let  consumer = channel.basic_consume(
