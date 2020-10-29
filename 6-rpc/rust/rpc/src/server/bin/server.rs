@@ -122,12 +122,13 @@ info!(?queue, "Declared queue '{}'", &queue.name().as_str());
                     println!("[.] Calculating fib({})", intvalue);
                     let result = fib(intvalue as usize);
                     println!("[X] fib({}) = {}",intvalue, result);
+                    let cid = delivery.properties.correlation_id().clone().unwrap();
                     channel.basic_publish(
                         "", //exchange
                         delivery.properties.reply_to().as_ref().unwrap().as_str(),
                         BasicPublishOptions::default(),
                         result.to_string().as_bytes().to_vec(),
-                        BasicProperties::default()
+                        BasicProperties::default().with_correlation_id(cid)
                     ).await.unwrap();
                 } else {
                     println!("ERROR: Unable to convert {} to an int", &value);

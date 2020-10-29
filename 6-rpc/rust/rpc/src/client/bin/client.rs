@@ -1,15 +1,18 @@
+use async_std::sync::Arc;
+use async_std::sync::Mutex;
 use lapin::{
     options::*, publisher_confirm::Confirmation, types::FieldTable, 
     BasicProperties, Connection,
-    ConnectionProperties, Result, message::DeliveryResult,
+    ConnectionProperties, Result
 };
 use lapin::types as ampt;
 use std::env;
-use tracing::info;
+use tracing::{info,error};
 use uuid::Uuid;
-use rpc::quit_service;
 use rpc::{LOCALHOST, QUEUE};
 use structopt::StructOpt;
+use std::iter::Iterator;
+use async_std::task;
 
 #[derive(Debug, StructOpt)]
 #[structopt(name="quess", about="provide a fib index")]
@@ -39,13 +42,13 @@ async fn main() -> Result<()> {
     let guess = opts.guess.to_string();
     
     let addr = std::env::var("AMQP_ADDR").unwrap_or_else(|_| LOCALHOST.into());
-
-  
+   
     let conn = Connection::connect(
         &addr,
         ConnectionProperties::default(),
     )
     .await?;
+
     info!("established connection to Rabbit server via {}", &addr);
 
     let channel = conn.create_channel().await?;
@@ -65,10 +68,11 @@ async fn main() -> Result<()> {
         )
         .await?;
   
-    info!(?queue, "Declared queue 'hello'");
+    info!( "Declared queue");
+   // info!(?queue, "Declared queue");
     
     // consumer
-    let consumer = channel.basic_consume(
+    let  consumer = channel.basic_consume(
         queue.name().as_str(), //queue
         "", // consumer tag
         BasicConsumeOptions{
@@ -82,22 +86,53 @@ async fn main() -> Result<()> {
 
  
     // generate correlation id
-    
+    let v: Option<u32> = None;
+    let fibval = Arc::new(Mutex::new(v));
+
     let correlation_id = Uuid::new_v4().to_hyphenated().to_string();
-    consumer.set_delegate(move |delivery: DeliveryResult| async move {
-        let delivery = delivery.expect("error caught in in client");
-        if let Some((_channel, delivery)) = delivery {
-            
-            let val = std::str::from_utf8(&delivery.data);
-            if let Ok(value) = val {
-                println!("[x] {}: f() = {}",delivery.routing_key, value);
+    let guess_c = guess.clone();
+    let cid = correlation_id.clone();
+    let fibval_c = fibval.clone();
+    let handle = task::spawn(async move {
+        let mut consumer_iter = consumer.into_iter();
+        while let Some(delivery_result) = consumer_iter.next() {
+            if let Ok((_channel, delivery)) = delivery_result {
+                // to be certain we have to check the correlation _id
+                //let val = std::str::from_utf8(&delivery.data);
+                // if let Ok(value) = val {
+                //     println!("[x] calculating fib({})", guess_c);
+                //     let value = value.parse::<u32>().unwrap();
+                //     *fibval_c.lock().await = Some(value);
+                // } else {
+                //     println!("unable to convert raw data from delivery to string");
+                // }
+
+                // I believe that i have read somewhere that i needed to validate the 
+                // correlation id, but it doesnt seem to be getting set.
+                if let Some(cor_id) = delivery.properties.correlation_id() {
+                    if cor_id.as_str() == &cid {
+                        let val = std::str::from_utf8(&delivery.data);
+                        if let Ok(value) = val {
+                            info!("[x] calculating fib({})", guess_c);
+                            let value = value.parse::<u32>().unwrap();
+                            *fibval_c.lock().await = Some(value);
+                        } else {
+                            error!("unable to convert raw data from delivery to string");
+                        }
+                    } else {
+                        error!("Correlation ids do not match");
+                    }
+                } else {
+                    error!("Error unwrapping correlation id {:#?}", delivery.properties.correlation_id());
+                }
                
             } else {
-                println!("unable to convert raw data from delivery to string");
+                error!("unable to convert raw data from delivery to string");
             }
-        } 
+            break;
+        }
 
-    })?;
+    });
 
     let confirm = channel
         .basic_publish(
@@ -123,6 +158,11 @@ async fn main() -> Result<()> {
         .await?; // two awaits to get from a doubly wrapped
         // Result 
     assert_eq!(confirm, Confirmation::NotRequested);
-        
-    Ok(quit_service::prompt())
+    
+    handle.await;
+    match *fibval.lock().await {
+        Some(val) => println!("\n\tfib() == {}", val),
+        None => error!("Error trying to calculate fib")
+    }
+    Ok(())
 }
