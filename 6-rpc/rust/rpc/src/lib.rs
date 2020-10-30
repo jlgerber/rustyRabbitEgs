@@ -111,66 +111,68 @@ impl Client {
                 FieldTable::default()
             ).await?;
 
-        // generate correlation id
-        let v: Option<usize> = None;
-        let fibval = Arc::new(Mutex::new(v));
+            // generate correlation id
+            let v: Option<usize> = None;
+            let fibval = Arc::new(Mutex::new(v));
 
-        let correlation_id = Uuid::new_v4().to_hyphenated().to_string();
-        let input_c = input.clone();
-        let cid = correlation_id.clone();
-        let fibval_c = fibval.clone();
-        let handle = task::spawn(async move {
-            let mut consumer_iter = consumer.into_iter();
-            while let Some(delivery_result) = consumer_iter.next() {
-                if let Ok((_channel, delivery)) = delivery_result {
-                   
-                    if let Some(cor_id) = delivery.properties.correlation_id() {
-                        if cor_id.as_str() == &cid {
-                            let val = std::str::from_utf8(&delivery.data);
-                            if let Ok(value) = val {
-                                info!("[x] calculating fib({})", input_c);
-                                let value = value.parse::<usize>().unwrap();
-                                *fibval_c.lock().await = Some(value);
+            let correlation_id = Uuid::new_v4().to_hyphenated().to_string();
+            let input_c = input.clone();
+            let cid = correlation_id.clone();
+            let fibval_c = fibval.clone();
+            let handle = task::spawn(async move {
+                let mut consumer_iter = consumer.into_iter();
+                while let Some(delivery_result) = consumer_iter.next() {
+                    if let Ok((_channel, delivery)) = delivery_result {
+                    
+                        if let Some(cor_id) = delivery.properties.correlation_id() {
+                            if cor_id.as_str() == &cid {
+                                let val = std::str::from_utf8(&delivery.data);
+                                if let Ok(value) = val {
+                                    info!("[x] calculating fib({})", input_c);
+                                    let value = value.parse::<usize>().unwrap();
+                                    *fibval_c.lock().await = Some(value);
+                                    // this is where the break should be
+                                    break;
+                                } else {
+                                    error!("unable to convert raw data from delivery to string");
+                                }
                             } else {
-                                error!("unable to convert raw data from delivery to string");
+                                error!("Correlation ids do not match");
                             }
                         } else {
-                            error!("Correlation ids do not match");
+                            error!("Error unwrapping correlation id {:#?}", delivery.properties.correlation_id());
                         }
+                    
                     } else {
-                        error!("Error unwrapping correlation id {:#?}", delivery.properties.correlation_id());
+                        error!("unable to convert raw data from delivery to string");
                     }
-                
-                } else {
-                    error!("unable to convert raw data from delivery to string");
+                    //break;
                 }
-                break;
-            }
 
-        });
+            });
 
-        let confirm = self.inner.chan
-            .basic_publish(
-                // exchange
-                "", 
-                // routing key
-                QUEUE, 
-                // options
-                BasicPublishOptions{
-                    mandatory: false,
-                    immediate: false,
-                },
-                // payload
-                input.as_bytes().to_vec(),
-                // properties
-                BasicProperties::default()
-                    .with_content_type(ampt::ShortString::from("text/plain"))
-                    .with_correlation_id(ampt::ShortString::from(correlation_id))
-                    .with_reply_to(queue.name().clone())
-                    ,
-            )
-            .await?
-            .await?; // two awaits to get from a doubly wrapped
+            let confirm = self.inner.chan
+                .basic_publish(
+                    // exchange
+                    "", 
+                    // routing key
+                    QUEUE, 
+                    // options
+                    BasicPublishOptions{
+                        mandatory: false,
+                        immediate: false,
+                    },
+                    // payload
+                    input.as_bytes().to_vec(),
+                    // properties
+                    BasicProperties::default()
+                        .with_content_type(ampt::ShortString::from("text/plain"))
+                        .with_correlation_id(ampt::ShortString::from(correlation_id))
+                        .with_reply_to(queue.name().clone())
+                        ,
+                )
+                .await?
+                .await?; // two awaits to get from a doubly wrapped
             // Result 
             assert_eq!(confirm, Confirmation::NotRequested);
             
