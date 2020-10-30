@@ -7,7 +7,7 @@ use std::env;
 use structopt::StructOpt;
 use tracing::info;
 
-use rpc::{LOCALHOST, QUEUE};
+use rpc::{LOCALHOST, QUEUE, ffib};
 use rpc::quit_service;
 
 
@@ -21,41 +21,6 @@ struct Opt {
     /// specified by this flag will be processed asynchronously
     #[structopt(short="n", long="num-msgs")]
     num_msgs: Option<u16>
-}
-
-// // very inefficent way of calculating fibonacci series
-// fn fib(n: usize) -> usize {
-//     if n == 0 {
-//         0
-//     } else if n == 1{
-//         1
-//     } else {
-//         fib(n-1) + fib(n-2)
-//     }
-// }
-
-fn _ffib(n: usize) -> (usize, usize) {
-    if n == 0 {
-        (0,1)
-    } else {
-        let (a,b) = _ffib(n / 2);
-        let c = a * (b * 2 - a);
-        let d = a * a + b * b;
-        if n % 2 == 0{
-            (c,d)
-        } else {
-            (d, c + d)
-        }
-    }
-}
-
-fn ffib(n:usize) -> usize {
-    if n == 0 {
-        0 
-    } else {
-        let (_,b) = _ffib(n-1);
-        b
-    }
 }
 
 // Perform basic setup, including parsing arguments
