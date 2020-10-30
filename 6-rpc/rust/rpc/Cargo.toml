@@ -30,3 +30,4 @@ async-lapin = "0.4.1"
 async-amqp = "0.1.8"
 structopt = "0.3.20"
 uuid = { version = "0.8.1", features = ["v4"] }
+anyhow = "1.0.33"

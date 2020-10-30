@@ -23,14 +23,38 @@ struct Opt {
     num_msgs: Option<u16>
 }
 
-// very inefficent way of calculating fibonacci series
-fn fib(n: usize) -> usize {
+// // very inefficent way of calculating fibonacci series
+// fn fib(n: usize) -> usize {
+//     if n == 0 {
+//         0
+//     } else if n == 1{
+//         1
+//     } else {
+//         fib(n-1) + fib(n-2)
+//     }
+// }
+
+fn _ffib(n: usize) -> (usize, usize) {
     if n == 0 {
-        0
-    } else if n == 1{
-        1
+        (0,1)
     } else {
-        fib(n-1) + fib(n-2)
+        let (a,b) = _ffib(n / 2);
+        let c = a * (b * 2 - a);
+        let d = a * a + b * b;
+        if n % 2 == 0{
+            (c,d)
+        } else {
+            (d, c + d)
+        }
+    }
+}
+
+fn ffib(n:usize) -> usize {
+    if n == 0 {
+        0 
+    } else {
+        let (_,b) = _ffib(n-1);
+        b
     }
 }
 
@@ -120,7 +144,7 @@ info!(?queue, "Declared queue '{}'", &queue.name().as_str());
             if let Ok(value) = val {
                 if let Ok(intvalue) = value.parse::<u32>() {
                     println!("[.] Calculating fib({})", intvalue);
-                    let result = fib(intvalue as usize);
+                    let result = ffib(intvalue as usize);
                     println!("[X] fib({}) = {}",intvalue, result);
                     let cid = delivery.properties.correlation_id().clone().unwrap();
                     channel.basic_publish(

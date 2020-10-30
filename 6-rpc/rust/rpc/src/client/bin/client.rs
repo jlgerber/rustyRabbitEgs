@@ -1,9 +1,12 @@
+use anyhow::Error as AnyhowError;
+use anyhow::anyhow;
 use async_std::sync::Arc;
 use async_std::sync::Mutex;
+use async_std::task;
 use lapin::{
     options::*, publisher_confirm::Confirmation, types::FieldTable, 
-    BasicProperties, Connection,
-    ConnectionProperties, Result
+    BasicProperties, Connection,Channel,
+    ConnectionProperties, Result as AsyncResult
 };
 use lapin::types as ampt;
 use std::env;
@@ -12,7 +15,6 @@ use uuid::Uuid;
 use rpc::{LOCALHOST, QUEUE};
 use structopt::StructOpt;
 use std::iter::Iterator;
-use async_std::task;
 
 #[derive(Debug, StructOpt)]
 #[structopt(name="quess", about="provide a fib index")]
@@ -35,133 +37,143 @@ fn setup() -> Opt {
     Opt::from_args()
 }
 
+struct Client {
+    pub conn: Connection,
+    pub chan: Channel,
+}
 
-#[async_std::main]
-async fn main() -> Result<()> {
-    let opts = setup();
-    let guess = opts.guess.to_string();
-    
-    let addr = std::env::var("AMQP_ADDR").unwrap_or_else(|_| LOCALHOST.into());
-   
-    let conn = Connection::connect(
-        &addr,
-        ConnectionProperties::default(),
-    )
-    .await?;
+impl Client {
+    pub fn new() -> AsyncResult<Self> {
 
-    info!("established connection to Rabbit server via {}", &addr);
+        task::block_on(async {
+            let addr = std::env::var("AMQP_ADDR").unwrap_or_else(|_| LOCALHOST.into());
+            
+            let conn = Connection::connect(
+                &addr,
+                ConnectionProperties::default(),
+            )
+            .await?;
 
-    let channel = conn.create_channel().await?;
-    info!("created channel");
+            info!("established connection to Rabbit server via {}", &addr);
 
-    let queue = channel
-        .queue_declare(
-            "",
-            QueueDeclareOptions{
-                durable: false,
-                exclusive:true,
-                auto_delete: false, 
-                nowait: false,
-                ..Default::default()
-            },
-            FieldTable::default(),
-        )
-        .await?;
-  
-    info!( "Declared queue");
-    
-    // consumer
-    let  consumer = channel.basic_consume(
-        queue.name().as_str(), //queue
-        "", // consumer tag
-        BasicConsumeOptions{
-            no_local: false,
-            no_ack: true,
-            exclusive: false,
-            nowait: false,
-        }, 
-        FieldTable::default()
-    ).await?;
+            let chan = conn.create_channel().await?;
+            info!("created channel");
 
- 
-    // generate correlation id
-    let v: Option<u32> = None;
-    let fibval = Arc::new(Mutex::new(v));
+        
+        Ok(Self {
+                conn,
+                chan,
+            })
+        })
+    }
 
-    let correlation_id = Uuid::new_v4().to_hyphenated().to_string();
-    let guess_c = guess.clone();
-    let cid = correlation_id.clone();
-    let fibval_c = fibval.clone();
-    let handle = task::spawn(async move {
-        let mut consumer_iter = consumer.into_iter();
-        while let Some(delivery_result) = consumer_iter.next() {
-            if let Ok((_channel, delivery)) = delivery_result {
-                // to be certain we have to check the correlation _id
-                //let val = std::str::from_utf8(&delivery.data);
-                // if let Ok(value) = val {
-                //     println!("[x] calculating fib({})", guess_c);
-                //     let value = value.parse::<u32>().unwrap();
-                //     *fibval_c.lock().await = Some(value);
-                // } else {
-                //     println!("unable to convert raw data from delivery to string");
-                // }
+    pub fn fib(&self, input: u32) -> AsyncResult<usize> {
+        task::block_on(async {
+            let input = input.to_string();
+            let queue = self.chan
+            .queue_declare(
+                "",
+                QueueDeclareOptions{
+                    durable: false,
+                    exclusive:true,
+                    auto_delete: false, 
+                    nowait: false,
+                    ..Default::default()
+                },
+                FieldTable::default(),
+            )
+            .await?;
 
-                // do a bit more work to get at the correlation_id 
-                // (ok a lot more work)
-                if let Some(cor_id) = delivery.properties.correlation_id() {
-                    if cor_id.as_str() == &cid {
-                        let val = std::str::from_utf8(&delivery.data);
-                        if let Ok(value) = val {
-                            info!("[x] calculating fib({})", guess_c);
-                            let value = value.parse::<u32>().unwrap();
-                            *fibval_c.lock().await = Some(value);
+            info!( "Declared queue");
+            
+            // consumer
+            let  consumer = self.chan.basic_consume(
+                queue.name().as_str(), //queue
+                "", // consumer tag
+                BasicConsumeOptions{
+                    no_local: false,
+                    no_ack: true,
+                    exclusive: false,
+                    nowait: false,
+                }, 
+                FieldTable::default()
+            ).await?;
+
+        // generate correlation id
+        let v: Option<usize> = None;
+        let fibval = Arc::new(Mutex::new(v));
+
+        let correlation_id = Uuid::new_v4().to_hyphenated().to_string();
+        let input_c = input.clone();
+        let cid = correlation_id.clone();
+        let fibval_c = fibval.clone();
+        let handle = task::spawn(async move {
+            let mut consumer_iter = consumer.into_iter();
+            while let Some(delivery_result) = consumer_iter.next() {
+                if let Ok((_channel, delivery)) = delivery_result {
+                   
+                    if let Some(cor_id) = delivery.properties.correlation_id() {
+                        if cor_id.as_str() == &cid {
+                            let val = std::str::from_utf8(&delivery.data);
+                            if let Ok(value) = val {
+                                info!("[x] calculating fib({})", input_c);
+                                let value = value.parse::<usize>().unwrap();
+                                *fibval_c.lock().await = Some(value);
+                            } else {
+                                error!("unable to convert raw data from delivery to string");
+                            }
                         } else {
-                            error!("unable to convert raw data from delivery to string");
+                            error!("Correlation ids do not match");
                         }
                     } else {
-                        error!("Correlation ids do not match");
+                        error!("Error unwrapping correlation id {:#?}", delivery.properties.correlation_id());
                     }
+                
                 } else {
-                    error!("Error unwrapping correlation id {:#?}", delivery.properties.correlation_id());
+                    error!("unable to convert raw data from delivery to string");
                 }
-               
-            } else {
-                error!("unable to convert raw data from delivery to string");
+                break;
             }
-            break;
-        }
 
-    });
+        });
 
-    let confirm = channel
-        .basic_publish(
-            // exchange
-            "", 
-            // routing key
-            QUEUE, 
-            // options
-            BasicPublishOptions{
-                mandatory: false,
-                immediate: false,
-            },
-            // payload
-            guess.as_bytes().to_vec(),
-            // properties
-            BasicProperties::default()
-                .with_content_type(ampt::ShortString::from("text/plain"))
-                .with_correlation_id(ampt::ShortString::from(correlation_id))
-                .with_reply_to(queue.name().clone())
-                ,
-         )
-        .await?
-        .await?; // two awaits to get from a doubly wrapped
-        // Result 
-    assert_eq!(confirm, Confirmation::NotRequested);
-    
-    handle.await;
-    match *fibval.lock().await {
-        Some(val) => println!("\n\tfib() == {}", val),
-        None => error!("Error trying to calculate fib")
+        let confirm = self.chan
+            .basic_publish(
+                // exchange
+                "", 
+                // routing key
+                QUEUE, 
+                // options
+                BasicPublishOptions{
+                    mandatory: false,
+                    immediate: false,
+                },
+                // payload
+                input.as_bytes().to_vec(),
+                // properties
+                BasicProperties::default()
+                    .with_content_type(ampt::ShortString::from("text/plain"))
+                    .with_correlation_id(ampt::ShortString::from(correlation_id))
+                    .with_reply_to(queue.name().clone())
+                    ,
+            )
+            .await?
+            .await?; // two awaits to get from a doubly wrapped
+            // Result 
+            assert_eq!(confirm, Confirmation::NotRequested);
+            
+            handle.await;
+            let rv = *fibval.lock().await;
+            // really should create a custom error type for this
+            let rv = rv.unwrap();
+            Ok(rv)
+        })
     }
+}
+ fn main() -> Result<(),AnyhowError> {
+    let opts = setup();
+    let client = Client::new().map_err(|e| anyhow!("{}", e))?;
+    let result = client.fib(opts.guess).map_err(|e| anyhow!("{}", e))?;
+    println!("fib({}) = {}",opts.guess, result);
     Ok(())
 }
