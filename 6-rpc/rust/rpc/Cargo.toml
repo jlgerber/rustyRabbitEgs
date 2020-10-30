@@ -1,17 +1,17 @@
 [package]
 name = "rpc"
-version = "0.2.0"
+version = "0.3.0"
 authors = ["Jonathan Gerber <jlgerber@gmail.com>"]
 edition = "2018"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [[bin]]
 name = "rpc-server"
-path = "src/server/bin/server.rs"
+path = "src/bin/server.rs"
 
 [[bin]]
 name = "rpc-client"
-path = "src/client/bin/client.rs"
+path = "src/bin/client.rs"
 
 
 [dependencies]

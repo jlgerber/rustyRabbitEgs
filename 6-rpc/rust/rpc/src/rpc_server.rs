@@ -1,50 +1,24 @@
-use async_std;
+use crate::{SimpleClient, ffib};
 use async_std::task;
 use lapin::{
-    options::*,  types::FieldTable,  Connection,BasicProperties,
-    ConnectionProperties, Result as AsyncResult, message::DeliveryResult, Queue, Channel
+    options::*, types::FieldTable, 
+    BasicProperties,
+    Result as AsyncResult
 };
-use std::env;
-use structopt::StructOpt;
-use tracing::info;
-
-use rpc::{LOCALHOST, QUEUE, ffib, SimpleClient};
-use rpc::quit_service;
-use anyhow::anyhow;
-use anyhow::Error as AnyhowError;
+use std::iter::Iterator;
+use tracing::{info};
 
 
-#[derive(Debug, StructOpt)]
-#[structopt(name="server", about="processes messages from rabbit work queue")]
-struct Opt {
-    /// Optionally bound the queue size. A value of 1 ensures that the
-    /// worker may only work on 1 message at a time. This will also force the 
-    /// worker to work synchronously. Otherwise, all messages up to the limit
-    /// specified by this flag will be processed asynchronously
-    #[structopt(short="n", long="num-msgs")]
-    num_msgs: Option<u16>
+pub struct FibRpcServer {
+    queue_name: String,
+    msgcnt: Option<u16>,
+    inner: SimpleClient,
+    queue_declare_opts: QueueDeclareOptions,
+    qos_opts: BasicQosOptions,
+    consume_opts: BasicConsumeOptions
 }
 
-// Perform basic setup, including parsing arguments
-fn setup() -> Opt {
-    if env::var("RUST_LOG").is_err() {
-        env::set_var("RUST_LOG", "info");
-    }
-    
-    tracing_subscriber::fmt::init();
-    Opt::from_args()
-}
-
-pub struct Server {
-    pub queue_name: String,
-    pub msgcnt: Option<u16>,
-    pub inner: SimpleClient,
-    pub queue_declare_opts: QueueDeclareOptions,
-    pub qos_opts: BasicQosOptions,
-    pub consume_opts: BasicConsumeOptions
-}
-
-impl Server {
+impl FibRpcServer {
     pub fn new(
         queue_name: impl Into<String>,
         msgcnt: Option<u16>,
@@ -54,7 +28,7 @@ impl Server {
     ) -> AsyncResult<Self> {
         let client = SimpleClient::new()?;
         let name = queue_name.into();
-        Ok(Server {
+        Ok(FibRpcServer {
             queue_name: name,
             msgcnt,
             inner: client,
@@ -64,7 +38,7 @@ impl Server {
         })
     }
 
-    /// Create  a Server instance with defualt values for Optionals. This
+    /// Create  a FibRpcServer instance with defualt values for Optionals. This
     /// cannot be implemented via Default trait, as it is fallible.
     pub fn with_defaults(queue_name: impl Into<String>) -> AsyncResult<Self> {
         Self::new(
@@ -87,29 +61,48 @@ impl Server {
         )
     }
 
-    pub fn queue_name(&mut self, name: impl Into<String>) {
+    pub fn client(&self) -> &SimpleClient {
+        &self.inner
+    }
+    
+    pub fn set_queue_name(&mut self, name: impl Into<String>) {
         self.queue_name = name.into();
     }
-    pub fn message_count(&mut self, cnt: Option<u16>) {
+    pub fn queue_name(&self) -> &str {
+        &self.queue_name
+    }
+    pub fn set_message_count(&mut self, cnt: Option<u16>) {
         self.msgcnt = cnt
     }
+    pub fn message_count(&self) -> Option<u16> {
+        self.msgcnt
+    }
     /// Set queue declare options
-    pub fn queue_declare_opts(&mut self, options: QueueDeclareOptions) {
+    pub fn set_queue_declare_opts(&mut self, options: QueueDeclareOptions) {
         self.queue_declare_opts = options;
     }
+    pub fn queue_declare_opts(&self) -> &QueueDeclareOptions {
+        &self.queue_declare_opts
+    }
     /// Set qos options
-    pub fn qos_options(&mut self, options: BasicQosOptions) {
+    pub fn set_qos_options(&mut self, options: BasicQosOptions) {
         self.qos_opts = options;
     }
+    pub fn qos_options(&self)-> &BasicQosOptions {
+        &self.qos_opts
+    }
     /// Set consume options
-    pub fn consume_opts(&mut self, options: BasicConsumeOptions) {
+    pub fn set_consume_opts(&mut self, options: BasicConsumeOptions) {
         self.consume_opts = options;
+    }
+    pub fn consume_opts(&self) -> &BasicConsumeOptions {
+        &self.consume_opts
     }
     /// Initiate the async service.
     pub fn serve(&self) -> AsyncResult<()> {
         task::block_on(async {
 
-            let queue = self.inner.chan
+            let queue = self.client().chan
                     .queue_declare(
                         self.queue_name.as_str(),
                         self.queue_declare_opts.clone(),
@@ -125,14 +118,14 @@ impl Server {
             //let qos_options = BasicQosOptions{global: false, ..Default::default()};
             let qos_options = self.qos_opts.clone();
             if let Some(msgcnt) = self.msgcnt {
-                self.inner.chan.basic_qos(msgcnt, qos_options).await?;
+                self.client().chan.basic_qos(msgcnt, qos_options).await?;
             } else {
-                self.inner.chan.basic_qos(1, qos_options).await?;
+                self.client().chan.basic_qos(1, qos_options).await?;
             }
             info!("QOS OPTIONS: {:#?}", qos_options);
 
             // Create the consumer for the incoming. named queue
-            let  consumer = self.inner.chan
+            let  consumer = self.client().chan
                 .basic_consume(
                     self.queue_name.as_str(),
                     "",
@@ -142,9 +135,10 @@ impl Server {
                 .await?;
 
             info!("Channel Consumer created");
-
+            // this will automagically move long running jobs onto a separate
+            // thread if they take too long. thanks async_std.
             let handle = task::spawn(async move {
-                //let delivery = delivery.expect("error caught in in consumer");
+            
                 let mut consumer_iter = consumer.into_iter();
                 while let Some(delivery_result) = consumer_iter.next() {
                     if let Ok((channel, delivery)) = delivery_result {
@@ -186,15 +180,3 @@ impl Server {
         })
     }
 }
-
-#[async_std::main]
-async fn main() -> AsyncResult<()> {
-
-    // process args
-    let opt = setup();
-    let mut server = Server::with_defaults(QUEUE)?; 
-    server.message_count(opt.num_msgs);
-    server.serve()?;
-    Ok(())
-}
-
