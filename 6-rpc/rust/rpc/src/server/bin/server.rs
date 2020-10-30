@@ -1,13 +1,13 @@
 use async_std;
 use lapin::{
     options::*,  types::FieldTable,  Connection,BasicProperties,
-    ConnectionProperties, Result, message::DeliveryResult
+    ConnectionProperties, Result as AsyncResult, message::DeliveryResult, Queue, Channel
 };
 use std::env;
 use structopt::StructOpt;
 use tracing::info;
 
-use rpc::{LOCALHOST, QUEUE, ffib};
+use rpc::{LOCALHOST, QUEUE, ffib, Client};
 use rpc::quit_service;
 
 
@@ -33,9 +33,65 @@ fn setup() -> Opt {
     Opt::from_args()
 }
 
+pub struct Server {
+    inner: Client,
+    queue_declare_opts: Option<QueueDeclareOptions>,
+    qos_opts: Option<BasicQosOptions>,
+    consume_opts: Option<BasicConsumeOptions>
+}
+
+impl Server {
+    pub fn new(
+        queue_declare_opts: Option<QueueDeclareOptions>,
+        qos_opts: Option<BasicQosOptions>,
+        consume_opts: Option<BasicConsumeOptions>
+    ) -> AsyncResult<Self> {
+        let client = Client::new()?;
+        Ok(Server {
+            inner: client,
+            queue_declare_opts,
+            qos_opts,
+            consume_opts
+        })
+    }
+
+    /// Create  a Server instance with defualt values for Optionals. This
+    /// cannot be implemented via Default trait, as it is fallible.
+    pub fn with_defaults() -> AsyncResult<Self> {
+        Self::new(
+            Some(QueueDeclareOptions{
+                durable: false,
+                exclusive:false,
+                auto_delete: false, 
+                nowait: false,
+                ..Default::default()
+            }),
+            Some(BasicQosOptions{global: false, ..Default::default()}),
+            Some(BasicConsumeOptions{
+                no_local: false,
+                no_ack: false,
+                exclusive: false,
+                nowait: false
+            }),
+        )
+    }
+
+    /// Set queue declare options
+    pub fn queue_declare_opts(&mut self, options: QueueDeclareOptions) {
+        self.queue_declare_opts = Some(options);
+    }
+    /// Set qos options
+    pub fn qos_options(&mut self, options: BasicQosOptions) {
+        self.qos_opts = Some(options);
+    }
+    /// Set consume options
+    pub fn consume_opts(&mut self, options: BasicConsumeOptions) {
+        self.consume_opts = Some(options);
+    }
+}
 
 #[async_std::main]
-async fn main() -> Result<()> {
+async fn main() -> AsyncResult<()> {
 
     // process args
     let opt = setup();
