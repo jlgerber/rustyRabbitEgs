@@ -1,7 +1,7 @@
 use anyhow::Error as AnyhowError;
 use anyhow::anyhow;
 use std::env;
-use rpc::FibClient;
+use rpc::{LogLevel,FibClient};
 use structopt::StructOpt;
 
 #[derive(Debug, StructOpt)]
@@ -13,7 +13,7 @@ struct Opt {
     guess: u32,
     /// set the log level
     #[structopt(short="l", long="log-level")]
-    loglevel: Option<String>
+    loglevel: Option<LogLevel>
 }
 
 // parse args, initialize the log level, and start
@@ -22,7 +22,8 @@ fn setup() -> Opt {
     let mut args = Opt::from_args();
     if args.loglevel.is_some() {
         let level = args.loglevel.take().unwrap();
-        env::set_var("RUST_LOG", &level);
+        let levelstr = level.as_ref();
+        env::set_var("RUST_LOG", &levelstr);
     } else if env::var("RUST_LOG").is_err() {
         env::set_var("RUST_LOG", "warn");
     }

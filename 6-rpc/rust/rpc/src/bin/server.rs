@@ -3,7 +3,7 @@ use lapin::Result as AsyncResult;
 use std::env;
 use structopt::StructOpt;
 
-use rpc::{ QUEUE, FibRpcServer};
+use rpc::{ QUEUE, FibRpcServer, LogLevel};
 
 
 #[derive(Debug, StructOpt)]
@@ -17,7 +17,7 @@ struct Opt {
     num_msgs: Option<u16>,
     /// set the log level
     #[structopt(short="l", long="log-level")]
-    loglevel: Option<String>
+    loglevel: Option<LogLevel>
 }
 
 // Perform basic setup, including parsing arguments
@@ -26,7 +26,8 @@ fn setup() -> Opt {
     let mut args = Opt::from_args();
     if args.loglevel.is_some() {
         let level = args.loglevel.take().unwrap();
-        env::set_var("RUST_LOG", &level);
+        let levelstr = level.as_ref();
+        env::set_var("RUST_LOG", &levelstr);
     } else if env::var("RUST_LOG").is_err() {
         env::set_var("RUST_LOG", "warn");
     }

@@ -7,6 +7,9 @@ use std::env;
 use std::iter::Iterator;
 use tracing::{info};
 
+pub mod log_level;
+pub use log_level::LogLevel;
+
 pub mod fib;
 pub use fib::ffib;
 
