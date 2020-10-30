@@ -2,14 +2,19 @@ use crate::{SimpleClient, QUEUE};
 use async_std::sync::Arc;
 use async_std::sync::Mutex;
 use async_std::task;
-use lapin::{types as ampt,
-    options::*, publisher_confirm::Confirmation, types::FieldTable, 
+use lapin::{
     BasicProperties,
-      Result as AsyncResult
+    options::*, 
+    publisher_confirm::Confirmation, 
+    Result as AsyncResult
+    types as ampt,
+    types::FieldTable, 
 };
 use std::iter::Iterator;
 use tracing::{info, error};
 use uuid::Uuid;
+
+
 pub struct FibClient {
     inner: SimpleClient
 }

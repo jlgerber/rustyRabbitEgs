@@ -1,14 +1,17 @@
-use crate::{SimpleClient, ffib};
 use async_std::task;
 use lapin::{
-    options::*, types::FieldTable, 
     BasicProperties,
+    options::*, 
     Result as AsyncResult
+    types::FieldTable, 
 };
 use std::iter::Iterator;
 use tracing::{info};
 
-
+use crate::{SimpleClient, ffib};
+/// Server which receives messages over RabbitMq which each provide an
+/// index into fibonacci sequence, which the service calculates and
+/// returns over a reply channel provided in the message.
 pub struct FibRpcServer {
     queue_name: String,
     msgcnt: Option<u16>,
@@ -19,6 +22,8 @@ pub struct FibRpcServer {
 }
 
 impl FibRpcServer {
+    /// Create a new instance of the FibRpcServer, given a queue name, optional message count,
+    /// and various lapin options
     pub fn new(
         queue_name: impl Into<String>,
         msgcnt: Option<u16>,
@@ -38,8 +43,9 @@ impl FibRpcServer {
         })
     }
 
-    /// Create  a FibRpcServer instance with defualt values for Optionals. This
-    /// cannot be implemented via Default trait, as it is fallible.
+    /// Create  a FibRpcServer instance with default values for Optionals. 
+    ///
+    /// This cannot be implemented via Default trait, as it is fallible.
     pub fn with_defaults(queue_name: impl Into<String>) -> AsyncResult<Self> {
         Self::new(
             queue_name,
@@ -61,19 +67,25 @@ impl FibRpcServer {
         )
     }
 
+    /// retrieve a reference to the inner SimpleClient instance, which houses
+    /// the connection and channel
     pub fn client(&self) -> &SimpleClient {
         &self.inner
     }
-    
+    /// Set the queue name after  the fact.
     pub fn set_queue_name(&mut self, name: impl Into<String>) {
         self.queue_name = name.into();
     }
+    /// Retrieve the queue name as a &str
     pub fn queue_name(&self) -> &str {
         &self.queue_name
     }
+    /// Set the total number of messages which may be processed
+    /// at once. If None is supplied, there are no limits
     pub fn set_message_count(&mut self, cnt: Option<u16>) {
         self.msgcnt = cnt
     }
+    /// Retrieve the message count
     pub fn message_count(&self) -> Option<u16> {
         self.msgcnt
     }
@@ -81,6 +93,7 @@ impl FibRpcServer {
     pub fn set_queue_declare_opts(&mut self, options: QueueDeclareOptions) {
         self.queue_declare_opts = options;
     }
+    /// Retrieve a reference to the QueueDeclareOptions struct
     pub fn queue_declare_opts(&self) -> &QueueDeclareOptions {
         &self.queue_declare_opts
     }
@@ -88,6 +101,7 @@ impl FibRpcServer {
     pub fn set_qos_options(&mut self, options: BasicQosOptions) {
         self.qos_opts = options;
     }
+    /// Retrieve a reference to the BasicQosOptions 
     pub fn qos_options(&self)-> &BasicQosOptions {
         &self.qos_opts
     }
@@ -95,10 +109,11 @@ impl FibRpcServer {
     pub fn set_consume_opts(&mut self, options: BasicConsumeOptions) {
         self.consume_opts = options;
     }
+    /// Retrieve a reference to the BasicConsumeOptions
     pub fn consume_opts(&self) -> &BasicConsumeOptions {
         &self.consume_opts
     }
-    /// Initiate the async service.
+    /// Start the service up. This method will block until done
     pub fn serve(&self) -> AsyncResult<()> {
         task::block_on(async {
 
