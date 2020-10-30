@@ -1,20 +1,28 @@
 use async_std::task;
 use lapin::{
-     Connection,Channel,
-    ConnectionProperties, Result as AsyncResult
+    Channel,
+    Connection,
+    ConnectionProperties, 
+    Result as AsyncResult
 };
 use std::env;
 use std::iter::Iterator;
 use tracing::{info};
 
-pub mod log_level;
-pub use log_level::LogLevel;
-
 pub mod fib;
-pub use fib::ffib;
+pub use fib::fib;
 
 pub mod constants;
 pub use constants::*;
+
+pub mod log_level;
+pub use log_level::LogLevel;
+
+pub mod rpc_client;
+pub use rpc_client::FibClient;
+
+pub mod rpc_server;
+pub use rpc_server::FibRpcServer;
 
 pub mod quit_service {
     use std::io;
@@ -65,8 +73,3 @@ impl SimpleClient {
         })
     }
 }
-
-pub mod rpc_client;
-pub use rpc_client::FibClient;
-pub mod rpc_server;
-pub use rpc_server::FibRpcServer;

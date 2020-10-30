@@ -14,7 +14,10 @@ fn _ffib(n: usize) -> (usize, usize) {
     }
 }
 
-pub fn ffib(n:usize) -> usize {
+/// Given an index into the fibonacci series, 
+/// calculate said series and return the corresponding
+/// value
+pub fn fib(n:usize) -> usize {
     if n == 0 {
         0 
     } else {

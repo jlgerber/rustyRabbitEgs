@@ -1,4 +1,3 @@
-use crate::{SimpleClient, QUEUE};
 use async_std::sync::Arc;
 use async_std::sync::Mutex;
 use async_std::task;
@@ -6,7 +5,7 @@ use lapin::{
     BasicProperties,
     options::*, 
     publisher_confirm::Confirmation, 
-    Result as AsyncResult
+    Result as AsyncResult,
     types as ampt,
     types::FieldTable, 
 };
@@ -14,17 +13,22 @@ use std::iter::Iterator;
 use tracing::{info, error};
 use uuid::Uuid;
 
+use crate::{SimpleClient, QUEUE};
 
+
+/// A Fibonacci Client
 pub struct FibClient {
     inner: SimpleClient
 }
 
 impl FibClient {
+    /// Create a new instance of Client
     pub fn new() -> AsyncResult<Self> {
         let inner = SimpleClient::new()?;
         Ok(Self{inner})
     }
-
+    
+    /// Request an item from the fibonacci series given an index.
     pub fn fib(&self, input: u32) -> AsyncResult<usize> {
         task::block_on(async {
             let input = input.to_string();

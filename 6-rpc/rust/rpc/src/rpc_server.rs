@@ -2,13 +2,15 @@ use async_std::task;
 use lapin::{
     BasicProperties,
     options::*, 
-    Result as AsyncResult
+    Result as AsyncResult,
     types::FieldTable, 
 };
 use std::iter::Iterator;
 use tracing::{info};
 
-use crate::{SimpleClient, ffib};
+use crate::{SimpleClient, fib};
+
+
 /// Server which receives messages over RabbitMq which each provide an
 /// index into fibonacci sequence, which the service calculates and
 /// returns over a reply channel provided in the message.
@@ -164,7 +166,7 @@ impl FibRpcServer {
                         if let Ok(value) = val {
                             if let Ok(intvalue) = value.parse::<u32>() {
                                 println!("[.] Calculating fib({})", intvalue);
-                                let result = ffib(intvalue as usize);
+                                let result = fib(intvalue as usize);
                                 println!("[X] fib({}) = {}",intvalue, result);
                                 let cid = delivery.properties.correlation_id().clone().unwrap();
                                 channel.basic_publish(
