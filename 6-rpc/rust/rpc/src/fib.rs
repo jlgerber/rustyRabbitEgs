@@ -1,9 +1,10 @@
 
-fn _ffib(n: usize) -> (usize, usize) {
+// Do the heavy lifting
+fn _fib(n: usize) -> (usize, usize) {
     if n == 0 {
         (0,1)
     } else {
-        let (a,b) = _ffib(n / 2);
+        let (a,b) = _fib(n / 2);
         let c = a * (b * 2 - a);
         let d = a * a + b * b;
         if n % 2 == 0{
@@ -16,12 +17,12 @@ fn _ffib(n: usize) -> (usize, usize) {
 
 /// Given an index into the fibonacci series, 
 /// calculate said series and return the corresponding
-/// value
+/// value. 
 pub fn fib(n:usize) -> usize {
     if n == 0 {
         0 
     } else {
-        let (_,b) = _ffib(n-1);
+        let (_,b) = _fib(n-1);
         b
     }
 }
